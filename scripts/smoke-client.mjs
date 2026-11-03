@@ -201,8 +201,9 @@ const snapshot = {
 
 hookOverrides[0] = true // open = true
 hookOverrides[1] = snapshot // state
-// 模拟「首次轮询已回填」后的输入框（真实环境由 poll 的 capsSynced 写入）
-hookOverrides[4] = { maxRetries: '3', maxRetryMs: '60' }
+// 模拟「首次轮询已回填」后的输入框（真实环境由 poll 的 capsSynced 写入；
+// baseDelayMs/maxDelayMs 未在 mock 快照里 → 回填为空串，占位符显示默认值）
+hookOverrides[4] = { maxRetries: '3', maxRetryMs: '60', baseDelaySec: '', maxDelaySec: '' }
 hookIndex = 0
 
 const GuardWidget = registered[0].component
@@ -275,9 +276,13 @@ check('已无 QUOTA 警示条', !joined.includes('配额已耗尽'))
 check('已无毛玻璃/着色控件', !joined.includes('毛玻璃') && !joined.includes('玻璃颜色'))
 
 const capInputs = collectAll(tree, (n) => n.props && n.props.className === 'd429g-cap')
-check('设防输入框有两个', capInputs.length === 2, capInputs.length)
+check('设防输入框有四个', capInputs.length === 4, capInputs.length)
 check('次数回填 3', Boolean(capInputs[0]) && capInputs[0].props.value === '3', capInputs[0] && capInputs[0].props.value)
 check('秒数回填 60', Boolean(capInputs[1]) && capInputs[1].props.value === '60', capInputs[1] && capInputs[1].props.value)
+check('起点回填留空（mock 未带 baseDelayMs）', Boolean(capInputs[2]) && capInputs[2].props.value === '', capInputs[2] && capInputs[2].props.value)
+check('封顶回填留空（mock 未带 maxDelayMs）', Boolean(capInputs[3]) && capInputs[3].props.value === '', capInputs[3] && capInputs[3].props.value)
+check('起点占位符 2', Boolean(capInputs[2]) && capInputs[2].props.placeholder === '2', capInputs[2] && capInputs[2].props.placeholder)
+check('封顶占位符 10', Boolean(capInputs[3]) && capInputs[3].props.placeholder === '10', capInputs[3] && capInputs[3].props.placeholder)
 
 // ------------------------------------------------------------------
 console.log('\n[4] 收起态渲染（关闭 + 零统计）')
