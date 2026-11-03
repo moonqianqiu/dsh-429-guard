@@ -2,7 +2,7 @@
 
 DeepSeek Harness（DSH）插件 —— **429 / 配额不足错误自动重试守卫**。
 
-在 DSH Web UI 右上角挂一枚浮窗：未开启守卫时是一颗半透明小点，开启后换成同一位置的一枚盾牌，点一下展开卡片。开启后，模型请求遇到 429（含 `429 insufficient_quota`，官方归类为 `QUOTA`）会**自动退避重试**，默认无限次，直至成功、被逃生阀拦截，或你手动停止。
+在 DSH Web UI 右上角挂一枚浮窗：未开启守卫时是一颗半透明小点，开启后换成同一位置的一枚盾牌，点一下展开卡片。开启后，模型请求遇到 429（含 `429 insufficient_quota`，官方归类为 `QUOTA`）会**自动退避重试**，默认无限次，直至成功、触发逃生阀放弃重试，或你手动停止。
 
 ## 它解决什么问题
 
@@ -71,7 +71,7 @@ DeepSeek Harness（DSH）插件 —— **429 / 配额不足错误自动重试守
       ├─ dsh-llm-retry: normal 模式 previousRetry >= maxRetries → return next()（放弃）
       └─ dsh-429-guard:
             开关关闭 / 非 429 类   → return next()（放行，抛 LlmError，任务中断）
-            逃生阀已触发          → return next()（放行，并记录「逃生阀拦截」）
+            逃生阀已触发          → return next()（放行，并记录「放弃重试」）
             开关开启 + 429 类     → 退避等待（signal 可取消）→ return { kind: 'retry' }
                                    agent loop continue → 重新发起请求
 ```
