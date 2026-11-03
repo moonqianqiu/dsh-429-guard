@@ -7,7 +7,11 @@
  *   node scripts/smoke.mjs
  */
 import { EventEmitter } from 'node:events'
+import { readFileSync } from 'node:fs'
 import { apply } from '../lib/index.js'
+
+/** 回报报文里的版本以 package.json 为准 —— 升版本不用改测试。 */
+const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 
 let failures = 0
 function check(name, cond, extra) {
@@ -121,6 +125,8 @@ console.log('\n[2] 非 429 一律放行')
   const app = await armed()
   const out = await app.fire(payload({ failure: { message: 'internal error', code: 'SERVER_ERROR', status: 500 } }))
   check('500 放行', out === 'NEXT', out)
+  const bare = await app.fire(payload({ failure: { message: 'gateway hiccup mentioning 429', code: 'SERVER_ERROR', status: 500 } }))
+  check('文案裸「429」不再命中（防误判）', bare === 'NEXT', bare)
   const st = await app.request('GET', '/state')
   check('未计入统计', st.json.stats.retriesTotal === 0, st.json.stats)
 }
@@ -220,18 +226,19 @@ console.log('\n[9] 路由与鉴权')
   const badCaps = await app.request('POST', '/caps', { maxRetries: -5, maxRetryMs: 10 })
   check('非法设防降级为无限', badCaps.json.caps.maxRetries === null && badCaps.json.caps.maxRetryMs === null, badCaps.json.caps)
   const report = await app.request('POST', '/client-report', {
-    version: '0.2.9', x: 1114, y: 86, w: 23, h: 26, vw: 1280, vh: 800, covered: false,
-    usedW: 19,
+    version: pkg.version, x: 1114, y: 86, w: 26, h: 26, vw: 1280, vh: 800,
+    usedW: 26,
     under: 'button.dsh-topbar-btn',
   })
   check('client-report 接受浏览器回报', report.code === 200 && report.json.ok === true, report.code)
   const withClient = await app.request('GET', '/state')
   check(
     '快照带浏览器落点（排查定位用）',
-    withClient.json.client && withClient.json.client.version === '0.2.9' &&
+    withClient.json.client && withClient.json.client.version === pkg.version &&
       withClient.json.client.x === 1114 && withClient.json.client.y === 86 &&
-      withClient.json.client.usedW === 19 &&
+      withClient.json.client.usedW === 26 &&
       withClient.json.client.under === 'button.dsh-topbar-btn' &&
+      withClient.json.client.covered === undefined &&
       typeof withClient.json.client.at === 'string',
     withClient.json.client,
   )

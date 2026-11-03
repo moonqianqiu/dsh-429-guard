@@ -20,6 +20,13 @@ function check(name, cond, extra) {
   }
 }
 
+/** 版本号以源码里的 VERSION 为准，并与 package.json 对账 —— 升版本不用改测试。 */
+import { readFileSync } from 'node:fs'
+const clientSrc = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+const CLIENT_VERSION = (clientSrc.match(/VERSION = '([^']+)'/) || [])[1]
+const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+check('源码 VERSION 与 package.json 同步', Boolean(CLIENT_VERSION) && CLIENT_VERSION === pkg.version, CLIENT_VERSION + ' vs ' + pkg.version)
+
 // ------------------------------------------------------------------
 // window / document 桩
 // ------------------------------------------------------------------
@@ -278,6 +285,7 @@ hookOverrides[0] = false
 hookOverrides[1] = { ok: true, enabled: false, caps: { maxRetries: null, maxRetryMs: null }, stats: { retriesTotal: 0, cappedTotal: 0, last429At: null, lastFailure: null }, active: [] }
 hookOverrides[4] = { maxRetries: '', maxRetryMs: '' }
 hookIndex = 0
+const idleEffectStart = effects.length
 let idle
 try {
   idle = GuardWidget({})
@@ -477,11 +485,11 @@ if (hostRef && placementEffect) {
   check(
     '落位后把坐标与版本回报给主机',
     reported.length > 0 &&
-      String(reported[reported.length - 1].options.body).includes('"version":"0.2.9"') &&
-      String(reported[reported.length - 1].options.body).includes('"covered"') &&
+      String(reported[reported.length - 1].options.body).includes('"version":"' + CLIENT_VERSION + '"') &&
       String(reported[reported.length - 1].options.body).includes('"under"'),
     reported.length,
   )
+  check('回报不再带 covered（诊断只留 under，一次探测）', reported.length > 0 && !String(reported[reported.length - 1].options.body).includes('"covered"'))
 
   // 形态宽度晚一帧才定型（字体 / 子元素布局）：下一帧补量一次，右边缘钉回原位
   rafQueue.length = 0
@@ -552,6 +560,45 @@ if (hostRef2 && place2) {
   check('变回小点后右边缘不动', parseFloat(host2.style.left) + host2.offsetWidth === rightBefore, host2.style.left)
   check('小点左边缘随之内缩到 370', parseFloat(host2.style.left) === 370, host2.style.left)
 }
+
+// ------------------------------------------------------------------
+console.log('\n[8] 性能：轮询门控 + 拖动回报节流 + 毛玻璃降档')
+check('毛玻璃降档（胶囊/浮标 12px、卡片 14px）', styles[0].textContent.includes('blur(12px)') && styles[0].textContent.includes('blur(14px)'))
+
+// a) 守卫关闭 + 卡片收起：主机状态无从变化，一个请求都不该发
+const stateFetchBase = fetchCalls.filter((c) => c.url === '/guard-api/state').length
+const idlePoll = effects[idleEffectStart + 3]
+check('捕获到收起态轮询 effect', typeof idlePoll === 'function')
+idlePoll()
+check('守卫关闭且卡片收起时零轮询', fetchCalls.filter((c) => c.url === '/guard-api/state').length === stateFetchBase)
+
+// b) 展开态：标签页不可见时暂停，回到前台立即补一次
+const openPoll = effects[effectStart + 3]
+check('捕获到展开态轮询 effect', typeof openPoll === 'function')
+globalThis.document.hidden = true
+const cleanupHidden = openPoll()
+check('标签页不可见时不发轮询', fetchCalls.filter((c) => c.url === '/guard-api/state').length === stateFetchBase)
+globalThis.document.hidden = false
+const cleanupVisible = openPoll()
+check('回到前台立即补一次轮询', fetchCalls.filter((c) => c.url === '/guard-api/state').length === stateFetchBase + 1)
+if (typeof cleanupHidden === 'function') cleanupHidden()
+if (typeof cleanupVisible === 'function') cleanupVisible()
+
+// c) 拖动中不发回报，pointerup 补报最终落点
+const reportsBase = fetchCalls.filter((c) => c.url === '/guard-api/client-report').length
+const dragRef3 = refs[refStart + 1]
+const savedDrag3 = dragRef3 ? dragRef3.current : null
+if (dragRef3) dragRef3.current = { id: 1, startX: 0, startY: 0, originX: 0, originY: 0, moved: true }
+fakeFace.offsetHeight = 37 // 换签名逼定位 effect 重跑
+placementEffect()
+check('拖动中落位不再逐帧回报', fetchCalls.filter((c) => c.url === '/guard-api/client-report').length === reportsBase)
+const pillForUp = pill || collectFind(tree, (n) => n && n.props && String(n.props.className || '').includes('d429g-pill'))
+if (pillForUp && pillForUp.props.onPointerUp) {
+  pillForUp.props.onPointerUp({ pointerId: 1, currentTarget: fakeHost })
+}
+check('拖动结束后补报最终落点', fetchCalls.filter((c) => c.url === '/guard-api/client-report').length === reportsBase + 1)
+if (dragRef3) dragRef3.current = savedDrag3
+fakeFace.offsetHeight = 34
 
 console.log(failures === 0 ? '\n全部通过' : `\n${failures} 项失败`)
 process.exit(failures === 0 ? 0 : 1)
