@@ -1,1 +1,0 @@
-- 浮窗默认落位：SAFE_TOP_INSET 实测可用值为 80（工具按钮行正下方）；v0.2.13 起落位探针（coveredAt/nudgeOutOfCover 等）已整体删除，被盖住时不再自动让位，只能调这个常量。 <!-- atomcode-memory:v1 {"id":"m-e8c60ac2-3223-482e-8849-786a993a3cc2","created_at":"2026-11-04T01:04:25.534Z","updated_at":"2026-11-04T01:40:43.609Z","topic":"dsh-429-guard 浮窗落位","status":"active","pinned":false} -->
