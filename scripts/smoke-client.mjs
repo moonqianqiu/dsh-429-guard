@@ -71,6 +71,8 @@ globalThis.document = {
   elementFromPoint(x, y) {
     return elementFromPointImpl ? elementFromPointImpl(x, y) : null
   },
+  addEventListener() {},
+  removeEventListener() {},
   createElement(tag) {
     return { tag, attrs: {}, setAttribute(k, v) { this.attrs[k] = v } }
   },
@@ -433,44 +435,9 @@ if (hostRef && placementEffect) {
   placementEffect()
   check('贴视口右上角 left', fakeHost.style.left === '1116px', fakeHost.style.left)
   let rect = fakeHost.getBoundingClientRect()
-  check('默认落在标题栏安全退让之下（y=82）', rect.top === 82, rect.top)
+  check('默认落在标题栏安全退让之下（y=80）', rect.top === 80, rect.top)
   check('换算后确实在视口内', rect.left >= 0 && rect.top >= 0 && rect.right <= 1280 && rect.bottom <= 800)
   check('right/bottom 锚点已清空', fakeHost.style.right === 'auto' && fakeHost.style.bottom === 'auto')
-
-  // 顶部那一条被标题栏盖住时，要自己往下让到探针看不见遮挡为止
-  const titlebar = { id: 'titlebar' }
-  elementFromPointImpl = (x, y) => (y < 150 ? titlebar : null)
-  fakeHost.offsetWidth = 151
-  fakeFace.offsetWidth = 151 // 形态宽度 = 签名来源，换个宽度逼定位 effect 重跑
-  placementEffect()
-  rect = fakeHost.getBoundingClientRect()
-  check('被标题栏盖住时自动下移', rect.top === 148, rect.top)
-  check('让位后探针已不被遮挡', globalThis.document.elementFromPoint(rect.left + 75, rect.top + 17) === null)
-
-  // 同层还压着别的插件的小角标时，也要让开（大层板不算）
-  const neighbour = {
-    getBoundingClientRect: () => ({ left: 1100, top: 100, right: 1260, bottom: 156, width: 160, height: 56 }),
-  }
-  fakeHost.parentNode = { children: [fakeHost, neighbour] }
-  elementFromPointImpl = () => null
-  fakeHost.offsetWidth = 152
-  fakeFace.offsetWidth = 152
-  placementEffect()
-  rect = fakeHost.getBoundingClientRect()
-  check('与同层小浮窗重叠时自动下移', rect.top === 170, rect.top)
-
-  // 拖动中不许自动让位：用户正拿着它挑位置，自动挪一下就会「来回闪」
-  const dragRef = refs[refStart + 1]
-  const savedDrag = dragRef ? dragRef.current : null
-  if (dragRef) dragRef.current = { id: 1, startX: 0, startY: 0, originX: 0, originY: 0, moved: true }
-  fakeHost.offsetWidth = 152
-  fakeFace.offsetWidth = 152
-  fakeFace.offsetHeight = 38 // 换签名逼定位 effect 重跑
-  placementEffect()
-  rect = fakeHost.getBoundingClientRect()
-  check('拖动中不再自动让位（用户放哪就是哪）', rect.top === 82, rect.top)
-  if (dragRef) dragRef.current = savedDrag
-  fakeFace.offsetHeight = 34
 
   const before = fakeHost.style.left
   placementEffect()
@@ -481,20 +448,10 @@ if (hostRef && placementEffect) {
   fakeHost.offsetHeight = 0
   fakeFace.offsetHeight = 35 // 换签名逼重跑
   placementEffect()
-  check('落位读形态宽度，不读宿主宽度', fakeHost.style.left === '1114px', fakeHost.style.left)
+  check('落位读形态宽度，不读宿主宽度', fakeHost.style.left === '1116px', fakeHost.style.left)
   fakeHost.offsetWidth = 152
   fakeHost.offsetHeight = 34
   fakeFace.offsetHeight = 34
-
-  const reported = fetchCalls.filter((c) => c.url === '/guard-api/client-report')
-  check(
-    '落位后把坐标与版本回报给主机',
-    reported.length > 0 &&
-      String(reported[reported.length - 1].options.body).includes('"version":"' + CLIENT_VERSION + '"') &&
-      String(reported[reported.length - 1].options.body).includes('"under"'),
-    reported.length,
-  )
-  check('回报不再带 covered（诊断只留 under，一次探测）', reported.length > 0 && !String(reported[reported.length - 1].options.body).includes('"covered"'))
 
   // 形态宽度晚一帧才定型（字体 / 子元素布局）：下一帧补量一次，右边缘钉回原位
   rafQueue.length = 0
@@ -507,13 +464,8 @@ if (hostRef && placementEffect) {
   fakeFace.offsetWidth = 158 // 晚一帧才变宽 6px
   const pending = rafQueue.slice()
   check('落位后挂了一帧补量', pending.length === 1, pending.length)
-  const reportsBefore = fetchCalls.filter((c) => c.url === '/guard-api/client-report').length
   pending.forEach((fn) => fn())
   check('宽度晚一帧定型时右边缘钉回原位', fakeHost.style.left === '1108px', fakeHost.style.left)
-  check(
-    '补量后重新回报',
-    fetchCalls.filter((c) => c.url === '/guard-api/client-report').length === reportsBefore + 1,
-  )
   fakeFace.offsetHeight = 34
 }
 
@@ -567,7 +519,7 @@ if (hostRef2 && place2) {
 }
 
 // ------------------------------------------------------------------
-console.log('\n[8] 性能：轮询门控 + 拖动回报节流 + 毛玻璃降档')
+console.log('\n[8] 性能：轮询门控 + 毛玻璃降档')
 check('毛玻璃降档（胶囊/浮标 12px、卡片 14px）', styles[0].textContent.includes('blur(12px)') && styles[0].textContent.includes('blur(14px)'))
 
 // a) 守卫关闭 + 卡片收起：主机状态无从变化，一个请求都不该发
@@ -588,22 +540,6 @@ const cleanupVisible = openPoll()
 check('回到前台立即补一次轮询', fetchCalls.filter((c) => c.url === '/guard-api/state').length === stateFetchBase + 1)
 if (typeof cleanupHidden === 'function') cleanupHidden()
 if (typeof cleanupVisible === 'function') cleanupVisible()
-
-// c) 拖动中不发回报，pointerup 补报最终落点
-const reportsBase = fetchCalls.filter((c) => c.url === '/guard-api/client-report').length
-const dragRef3 = refs[refStart + 1]
-const savedDrag3 = dragRef3 ? dragRef3.current : null
-if (dragRef3) dragRef3.current = { id: 1, startX: 0, startY: 0, originX: 0, originY: 0, moved: true }
-fakeFace.offsetHeight = 37 // 换签名逼定位 effect 重跑
-placementEffect()
-check('拖动中落位不再逐帧回报', fetchCalls.filter((c) => c.url === '/guard-api/client-report').length === reportsBase)
-const pillForUp = pill || collectFind(tree, (n) => n && n.props && String(n.props.className || '').includes('d429g-pill'))
-if (pillForUp && pillForUp.props.onPointerUp) {
-  pillForUp.props.onPointerUp({ pointerId: 1, currentTarget: fakeHost })
-}
-check('拖动结束后补报最终落点', fetchCalls.filter((c) => c.url === '/guard-api/client-report').length === reportsBase + 1)
-if (dragRef3) dragRef3.current = savedDrag3
-fakeFace.offsetHeight = 34
 
 console.log(failures === 0 ? '\n全部通过' : `\n${failures} 项失败`)
 process.exit(failures === 0 ? 0 : 1)

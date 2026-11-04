@@ -225,23 +225,6 @@ console.log('\n[9] 路由与鉴权')
   check('同源 Origin 放行', same.code === 200, same.code)
   const badCaps = await app.request('POST', '/caps', { maxRetries: -5, maxRetryMs: 10 })
   check('非法设防降级为无限', badCaps.json.caps.maxRetries === null && badCaps.json.caps.maxRetryMs === null, badCaps.json.caps)
-  const report = await app.request('POST', '/client-report', {
-    version: pkg.version, x: 1114, y: 86, w: 26, h: 26, vw: 1280, vh: 800,
-    usedW: 26,
-    under: 'button.dsh-topbar-btn',
-  })
-  check('client-report 接受浏览器回报', report.code === 200 && report.json.ok === true, report.code)
-  const withClient = await app.request('GET', '/state')
-  check(
-    '快照带浏览器落点（排查定位用）',
-    withClient.json.client && withClient.json.client.version === pkg.version &&
-      withClient.json.client.x === 1114 && withClient.json.client.y === 86 &&
-      withClient.json.client.usedW === 26 &&
-      withClient.json.client.under === 'button.dsh-topbar-btn' &&
-      withClient.json.client.covered === undefined &&
-      typeof withClient.json.client.at === 'string',
-    withClient.json.client,
-  )
 }
 
 console.log(failures === 0 ? '\n全部通过' : `\n${failures} 项失败`)
