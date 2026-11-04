@@ -1,7 +1,7 @@
 {
   "name": "dsh-429-guard",
   "description": "DeepSeek Harness 429 守卫：Web UI 右上角常驻浮窗（关闭态小点 / 开启态盾牌，同一格位，开关不跳位），开启后遇到 429 / 配额不足(insufficient_quota) 错误自动退避重试（默认无限，可设逃生阀上限），避免任务中断。",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "type": "module",
   "author": "moonqianqiu",
   "repository": {
